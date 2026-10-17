@@ -124,4 +124,5 @@ jobs:
             plugin/tests/test_phone_platform.py \
             plugin/tests/test_desktop_tool_availability.py \
             plugin/tests/test_desktop_multidevice.py \
-            plugin/tests/test_desktop_strict_id.py
+            plugin/tests/test_desktop_strict_id.py \
+            plugin/tests/test_desktop_request_lifetime.py
