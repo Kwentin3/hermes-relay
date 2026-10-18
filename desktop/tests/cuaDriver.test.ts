@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -73,7 +73,7 @@ async function fakeInstall(): Promise<{ home: string; binary: string; cleanup():
   const binary = join(release, 'cua-driver.exe')
   await writeFile(binary, '')
   await symlink(release, current, 'junction')
-  return { home, binary, cleanup: () => rm(home, { recursive: true, force: true }) }
+  return { home, binary: await realpath(binary), cleanup: () => rm(home, { recursive: true, force: true }) }
 }
 
 test('discovers only the canonical package/current executable and negotiates readiness', async () => {

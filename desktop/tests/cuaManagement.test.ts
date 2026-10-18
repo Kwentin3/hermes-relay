@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { access, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -26,7 +26,7 @@ async function packageHome(version = '0.20.0'): Promise<{ root: string; binary: 
   const binary = join(release, 'cua-driver.exe')
   await writeFile(binary, `fake-cua-${version}`)
   await symlink(release, current, 'junction')
-  return { root, binary }
+  return { root, binary: await realpath(binary) }
 }
 
 class ProbeRunner implements CuaProcessRunner {
