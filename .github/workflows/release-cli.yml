@@ -2,7 +2,8 @@ name: Hermes-Relay CLI+UI Release
 
 on:
   push:
-    tags: ['desktop-v*']
+    # The reviewed Windows packaging lane owns distribution-only tags.
+    tags: ['desktop-v*', '!desktop-v*.kwentin.*']
   workflow_dispatch:
     inputs:
       version:
