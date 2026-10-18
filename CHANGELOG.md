@@ -30,6 +30,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Android keeps user-started Dashboard browser sign-in connected through its callback and session verification, then ends the foreground service. Callback pages identify the selected sign-in provider.
 - Android keeps quiet tools and provider waits alive, including turns submitted by another client, and recovers missing completion events from authoritative Gateway state without sending Stop.
 
+## [0.4.0-beta.10.kwentin.1] - 2026-10-18
+
+### Changed
+
+- This Windows distribution checks for native CLI/UI updates in `Kwentin3/hermes-relay`, preserving its approval-lifetime correction until an equivalent upstream release is accepted. Explicit CLI `--repo` overrides remain available.
+
 ## [0.4.0-beta.10] - 2026-10-08
 
 ### Fixed

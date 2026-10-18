@@ -2,7 +2,7 @@
 // wrapping; `commands/update.ts` is the thin UI shell on top.
 //
 // Strategy:
-//   1. Query the GitHub Releases API for this repo (default Codename-11/hermes-relay),
+//   1. Query the GitHub Releases API for this distribution (default Kwentin3/hermes-relay),
 //      prefer tags starting with `desktop-v`, and fall back to historical
 //      `cli-v` releases. Zero deps.
 //   2. Pick the asset for this platform (`process.platform` + `process.arch`).
@@ -28,7 +28,8 @@ import { pipeline } from 'node:stream/promises'
 
 import { VERSION } from './version.js'
 
-const DEFAULT_REPO = 'Codename-11/hermes-relay'
+// Keep this distribution's approval-lifetime fix until an accepted upstream release includes it.
+const DEFAULT_REPO = 'Kwentin3/hermes-relay'
 const RELEASES_API = (repo: string, page: number): string =>
   `https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}`
 
