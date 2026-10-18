@@ -4,15 +4,15 @@ SetCompressor /SOLID lzma
 
 !include "MUI2.nsh"
 
-Name "Hermes-Relay CLI UI"
+Name "Hermes Relay"
 OutFile "${OUT_FILE}"
 InstallDir "$PROFILE\.hermes\bin"
 InstallDirRegKey HKCU "Software\HermesRelay" "InstallDir"
 Icon "${ICON_FILE}"
 UninstallIcon "${ICON_FILE}"
-BrandingText "Hermes-Relay CLI UI ${VERSION}"
+BrandingText "Hermes Relay ${VERSION}"
 VIProductVersion "${VERSION_NUM}"
-VIAddVersionKey "ProductName" "Hermes-Relay CLI UI"
+VIAddVersionKey "ProductName" "Hermes Relay"
 VIAddVersionKey "FileDescription" "Hermes-Relay CLI and compact Windows management UI installer"
 VIAddVersionKey "ProductVersion" "${VERSION}"
 VIAddVersionKey "FileVersion" "${VERSION}"
@@ -30,7 +30,7 @@ FunctionEnd
 !define MUI_UNICON "${ICON_FILE}"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\hermes-relay-tray.exe"
 !define MUI_FINISHPAGE_RUN_PARAMETERS "--show"
-!define MUI_FINISHPAGE_RUN_TEXT "Start Hermes-Relay CLI UI"
+!define MUI_FINISHPAGE_RUN_TEXT "Start Hermes Relay"
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_COMPONENTS
@@ -80,14 +80,14 @@ install_attempt_failed:
   Sleep 350
   Goto install_attempt
 cli_verification_failed:
-  MessageBox MB_ICONSTOP "Hermes-Relay CLI UI ${VERSION} could not replace the running installation. Close Hermes-Relay processes and run setup again." /SD IDOK
+  MessageBox MB_ICONSTOP "Hermes Relay ${VERSION} could not replace the running installation. Close Hermes-Relay processes and run setup again." /SD IDOK
   SetErrorLevel 1
   Quit
 cli_verified:
   WriteUninstaller "$INSTDIR\uninstall-hermes-relay.exe"
 
   WriteRegStr HKCU "Software\HermesRelay" "InstallDir" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HermesRelay" "DisplayName" "Hermes-Relay CLI UI"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HermesRelay" "DisplayName" "Hermes Relay"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HermesRelay" "DisplayVersion" "${VERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HermesRelay" "Publisher" "Axiom Labs"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HermesRelay" "InstallLocation" "$INSTDIR"
@@ -99,12 +99,14 @@ cli_verified:
   Delete "$SMPROGRAMS\Hermes Relay\Hermes Relay TUI.lnk"
   Delete "$SMPROGRAMS\Hermes Relay\Hermes Relay Tray.lnk"
   Delete "$SMPROGRAMS\Hermes Relay\Hermes Relay Systray.lnk"
-  Delete "$SMPROGRAMS\Hermes Relay\Uninstall Hermes Relay.lnk"
-  RMDir "$SMPROGRAMS\Hermes Relay"
-  CreateDirectory "$SMPROGRAMS\Hermes-Relay CLI"
-  CreateShortCut "$SMPROGRAMS\Hermes-Relay CLI\Hermes-Relay CLI.lnk" "$INSTDIR\hermes-relay.exe" "" "$INSTDIR\hermes-relay-tray.exe" 0
-  CreateShortCut "$SMPROGRAMS\Hermes-Relay CLI\Hermes-Relay CLI UI.lnk" "$INSTDIR\hermes-relay-ui.cmd" "" "$INSTDIR\hermes-relay-tray.exe" 0
-  CreateShortCut "$SMPROGRAMS\Hermes-Relay CLI\Uninstall Hermes-Relay CLI.lnk" "$INSTDIR\uninstall-hermes-relay.exe"
+  Delete "$SMPROGRAMS\Hermes-Relay CLI\Hermes-Relay CLI.lnk"
+  Delete "$SMPROGRAMS\Hermes-Relay CLI\Hermes-Relay CLI UI.lnk"
+  Delete "$SMPROGRAMS\Hermes-Relay CLI\Uninstall Hermes-Relay CLI.lnk"
+  RMDir "$SMPROGRAMS\Hermes-Relay CLI"
+  CreateDirectory "$SMPROGRAMS\Hermes Relay"
+  CreateShortCut "$SMPROGRAMS\Hermes Relay\Hermes Relay.lnk" "$INSTDIR\hermes-relay-tray.exe" "--show" "$INSTDIR\hermes-relay-tray.exe" 0
+  CreateShortCut "$SMPROGRAMS\Hermes Relay\Hermes Relay CLI.lnk" "$INSTDIR\hermes-relay.exe" "" "$INSTDIR\hermes-relay-tray.exe" 0
+  CreateShortCut "$SMPROGRAMS\Hermes Relay\Uninstall Hermes Relay.lnk" "$INSTDIR\uninstall-hermes-relay.exe"
 
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "HermesRelayTray"
   nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\hermes-relay-path.ps1" add "$INSTDIR"'
@@ -129,6 +131,8 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\Hermes Relay\Hermes Relay TUI.lnk"
   Delete "$SMPROGRAMS\Hermes Relay\Hermes Relay Tray.lnk"
   Delete "$SMPROGRAMS\Hermes Relay\Hermes Relay Systray.lnk"
+  Delete "$SMPROGRAMS\Hermes Relay\Hermes Relay.lnk"
+  Delete "$SMPROGRAMS\Hermes Relay\Hermes Relay CLI.lnk"
   Delete "$SMPROGRAMS\Hermes Relay\Uninstall Hermes Relay.lnk"
   RMDir "$SMPROGRAMS\Hermes Relay"
   Delete "$SMPROGRAMS\Hermes-Relay CLI\Hermes-Relay CLI.lnk"

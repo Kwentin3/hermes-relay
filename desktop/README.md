@@ -42,6 +42,11 @@ The Windows installer places `hermes-relay.exe` and the small
 `hermes-relay-tray.exe` beside each other in `~/.hermes/bin`. There is one CLI
 binary and one set of state files; the tray does not bundle a private sidecar.
 
+Open **Start → Hermes Relay → Hermes Relay** for the management window.
+The same folder contains **Hermes Relay CLI** for the console client and
+**Uninstall Hermes Relay**. The installer replaces its older `Hermes-Relay CLI`
+shortcuts during upgrades without removing saved hosts or settings.
+
 | Surface | Intended use | Default experience |
 |---------|--------------|--------------------|
 | CLI/TUI | Primary desktop experience | Interactive remote Hermes TUI plus scriptable commands and JSON output |

@@ -30,6 +30,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Android keeps user-started Dashboard browser sign-in connected through its callback and session verification, then ends the foreground service. Callback pages identify the selected sign-in provider.
 - Android keeps quiet tools and provider waits alive, including turns submitted by another client, and recovers missing completion events from authoritative Gateway state without sending Stop.
 
+## [0.4.0-beta.10.kwentin.2] - 2026-10-18
+
+### Fixed
+
+- Windows setup creates one **Hermes Relay** Start menu folder with distinct management UI, console client, and uninstall shortcuts. The UI shortcut opens the management window directly; upgrades remove the old confusing shortcuts and preserve saved hosts and settings.
+
 ## [0.4.0-beta.10.kwentin.1] - 2026-10-18
 
 ### Changed
