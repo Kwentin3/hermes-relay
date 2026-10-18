@@ -420,10 +420,9 @@ jobs:
           $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\HermesRelay'
           $productKey = 'HKCU:\Software\HermesRelay'
           $startupKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-          $startMenuRoot = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
-          $startMenuDir = Join-Path $startMenuRoot 'Hermes Relay'
-          $legacyMenuDir = Join-Path $startMenuRoot 'Hermes-Relay CLI'
-          $unrelatedSentinel = Join-Path $legacyMenuDir 'unrelated-user-file.txt'
+          $legacyMenuDir = $null
+          $unrelatedSentinel = $null
+          $startMenuPreflightPassed = $false
           $expectedLinks = @{
             'Hermes Relay.lnk' = @{ Target = (Join-Path $installDir 'hermes-relay-tray.exe'); Arguments = '--show' }
             'Hermes Relay CLI.lnk' = @{ Target = (Join-Path $installDir 'hermes-relay.exe'); Arguments = '' }
@@ -431,7 +430,6 @@ jobs:
           }
           $legacyLinks = @('Hermes-Relay CLI.lnk', 'Hermes-Relay CLI UI.lnk', 'Uninstall Hermes-Relay CLI.lnk')
           $historicalLinks = @('Hermes Relay TUI.lnk', 'Hermes Relay Tray.lnk', 'Hermes Relay Systray.lnk')
-          $shortcutShell = New-Object -ComObject WScript.Shell
           $oldUserProfile = $env:USERPROFILE
           $oldHomeEnv = $env:HOME
           $environmentKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
@@ -444,9 +442,6 @@ jobs:
 
           if (Test-Path $uninstallKey) { throw 'installer smoke requires a clean HermesRelay uninstall registry key' }
           if (Test-Path $productKey) { throw 'installer smoke requires a clean HermesRelay product registry key' }
-          foreach ($dir in @($startMenuDir, $legacyMenuDir)) {
-            if (Test-Path -LiteralPath $dir) { throw "installer smoke requires a clean Start-menu folder: $dir" }
-          }
           if (Test-Path $smokeRoot) { Remove-Item -LiteralPath $smokeRoot -Recurse -Force }
           New-Item -ItemType Directory -Force -Path $sessionDir | Out-Null
           Set-Content -LiteralPath $sessionSentinel -Value '{"version":1,"sessions":{},"sentinel":"preserve-me"}' -Encoding UTF8
@@ -459,6 +454,27 @@ jobs:
           $env:USERPROFILE = $smokeProfile
           $env:HOME = $smokeProfile
           try {
+            # Windows Shell caches known-folder paths. Resolve Programs in a
+            # fresh process inheriting the same fake profile as NSIS, rather
+            # than deriving it from APPDATA or reusing this process's cache.
+            # DoNotVerify returns the native path before setup creates it.
+            $programsPaths = @(& (Join-Path $PSHOME 'pwsh.exe') -NoProfile -NonInteractive -Command '[Environment]::GetFolderPath([Environment+SpecialFolder]::Programs, [Environment+SpecialFolderOption]::DoNotVerify)')
+            if ($LASTEXITCODE -ne 0 -or $programsPaths.Count -ne 1 -or
+                [string]::IsNullOrWhiteSpace([string]$programsPaths[0]) -or
+                -not [IO.Path]::IsPathFullyQualified([string]$programsPaths[0])) {
+              throw 'could not resolve the native Programs folder for the installer smoke profile'
+            }
+            $startMenuRoot = [string]$programsPaths[0]
+            Write-Host "installer smoke native Programs folder: $startMenuRoot"
+            $startMenuDir = Join-Path $startMenuRoot 'Hermes Relay'
+            $legacyMenuDir = Join-Path $startMenuRoot 'Hermes-Relay CLI'
+            $unrelatedSentinel = Join-Path $legacyMenuDir 'unrelated-user-file.txt'
+            foreach ($dir in @($startMenuDir, $legacyMenuDir)) {
+              if (Test-Path -LiteralPath $dir) { throw "installer smoke requires a clean Start-menu folder: $dir" }
+            }
+            $startMenuPreflightPassed = $true
+            $shortcutShell = New-Object -ComObject WScript.Shell
+
             $environmentKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
             $environmentKey.SetValue('Path', $userPathBefore, [Microsoft.Win32.RegistryValueKind]::String)
             $environmentKey.Dispose()
@@ -590,10 +606,10 @@ jobs:
               $environmentKey.DeleteValue('Path', $false)
             }
             $environmentKey.Dispose()
-            if (Test-Path -LiteralPath $unrelatedSentinel) {
+            if ($startMenuPreflightPassed -and (Test-Path -LiteralPath $unrelatedSentinel)) {
               Remove-Item -LiteralPath $unrelatedSentinel -Force
             }
-            if ((Test-Path -LiteralPath $legacyMenuDir) -and
+            if ($startMenuPreflightPassed -and (Test-Path -LiteralPath $legacyMenuDir) -and
                 @(Get-ChildItem -LiteralPath $legacyMenuDir -Force).Count -eq 0) {
               # Only remove the now-empty folder, never unrelated contents.
               Remove-Item -LiteralPath $legacyMenuDir -ErrorAction SilentlyContinue
