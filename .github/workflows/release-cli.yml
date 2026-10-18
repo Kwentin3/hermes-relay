@@ -384,17 +384,54 @@ jobs:
             }
           }
 
+          function Assert-PreservedState {
+            foreach ($path in $preservedHashes.Keys) {
+              if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                throw "installer lifecycle removed preserved state $path"
+              }
+              if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $preservedHashes[$path]) {
+                throw "installer lifecycle modified preserved state $path"
+              }
+            }
+          }
+
+          function Assert-StartMenuShortcuts {
+            $links = @(Get-ChildItem -LiteralPath $startMenuDir -Filter '*.lnk' -File)
+            if ($links.Count -ne $expectedLinks.Count) { throw 'expected exactly three Hermes Relay shortcuts' }
+            foreach ($name in $expectedLinks.Keys) {
+              $path = Join-Path $startMenuDir $name
+              if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "missing shortcut $path" }
+              $link = $shortcutShell.CreateShortcut($path)
+              $expected = $expectedLinks[$name]
+              if ($link.TargetPath -ne $expected.Target -or $link.Arguments -cne $expected.Arguments) {
+                throw "incorrect shortcut target or arguments: $path"
+              }
+            }
+          }
+
           $setup = (Resolve-Path 'dist/tray/hermes-relay-windows-x64-setup.exe').Path
           $smokeRoot = Join-Path $env:RUNNER_TEMP 'hermes-installer-lifecycle-smoke'
           $smokeProfile = Join-Path $smokeRoot 'profile'
           $installDir = Join-Path $smokeRoot 'installed files'
           $sessionDir = Join-Path $smokeProfile '.hermes'
           $sessionSentinel = Join-Path $sessionDir 'remote-sessions.json'
+          $deviceSentinel = Join-Path $sessionDir 'desktop-device-id'
           $uninstaller = Join-Path $installDir 'uninstall-hermes-relay.exe'
           $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\HermesRelay'
           $productKey = 'HKCU:\Software\HermesRelay'
           $startupKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-          $startMenuDir = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Hermes-Relay CLI'
+          $startMenuRoot = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
+          $startMenuDir = Join-Path $startMenuRoot 'Hermes Relay'
+          $legacyMenuDir = Join-Path $startMenuRoot 'Hermes-Relay CLI'
+          $unrelatedSentinel = Join-Path $legacyMenuDir 'unrelated-user-file.txt'
+          $expectedLinks = @{
+            'Hermes Relay.lnk' = @{ Target = (Join-Path $installDir 'hermes-relay-tray.exe'); Arguments = '--show' }
+            'Hermes Relay CLI.lnk' = @{ Target = (Join-Path $installDir 'hermes-relay.exe'); Arguments = '' }
+            'Uninstall Hermes Relay.lnk' = @{ Target = $uninstaller; Arguments = '' }
+          }
+          $legacyLinks = @('Hermes-Relay CLI.lnk', 'Hermes-Relay CLI UI.lnk', 'Uninstall Hermes-Relay CLI.lnk')
+          $historicalLinks = @('Hermes Relay TUI.lnk', 'Hermes Relay Tray.lnk', 'Hermes Relay Systray.lnk')
+          $shortcutShell = New-Object -ComObject WScript.Shell
           $oldUserProfile = $env:USERPROFILE
           $oldHomeEnv = $env:HOME
           $environmentKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
@@ -407,9 +444,17 @@ jobs:
 
           if (Test-Path $uninstallKey) { throw 'installer smoke requires a clean HermesRelay uninstall registry key' }
           if (Test-Path $productKey) { throw 'installer smoke requires a clean HermesRelay product registry key' }
+          foreach ($dir in @($startMenuDir, $legacyMenuDir)) {
+            if (Test-Path -LiteralPath $dir) { throw "installer smoke requires a clean Start-menu folder: $dir" }
+          }
           if (Test-Path $smokeRoot) { Remove-Item -LiteralPath $smokeRoot -Recurse -Force }
           New-Item -ItemType Directory -Force -Path $sessionDir | Out-Null
-          Set-Content -LiteralPath $sessionSentinel -Value '{"sentinel":"preserve-me"}' -Encoding UTF8
+          Set-Content -LiteralPath $sessionSentinel -Value '{"version":1,"sessions":{},"sentinel":"preserve-me"}' -Encoding UTF8
+          Set-Content -LiteralPath $deviceSentinel -Value '190a503d-96d6-4ce5-844d-4145be94b1c4' -Encoding UTF8
+          $preservedHashes = @{}
+          foreach ($path in @($sessionSentinel, $deviceSentinel)) {
+            $preservedHashes[$path] = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+          }
 
           $env:USERPROFILE = $smokeProfile
           $env:HOME = $smokeProfile
@@ -420,6 +465,32 @@ jobs:
 
             $installProcess = Start-Process -FilePath $setup -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
             if ($installProcess.ExitCode -ne 0) { throw "installer exited with code $($installProcess.ExitCode)" }
+            Assert-StartMenuShortcuts
+            Assert-PreservedState
+            if (Test-Path -LiteralPath $legacyMenuDir) { throw 'fresh install created the legacy Start-menu folder' }
+
+            # Seed both previously published shortcut layouts before reinstalling
+            # the native bundle. Keep a foreign file to catch recursive cleanup.
+            New-Item -ItemType Directory -Path $legacyMenuDir | Out-Null
+            Set-Content -LiteralPath $unrelatedSentinel -Value 'unrelated-user-content' -Encoding UTF8
+            $preservedHashes[$unrelatedSentinel] = (Get-FileHash -LiteralPath $unrelatedSentinel -Algorithm SHA256).Hash
+            foreach ($name in $legacyLinks) {
+              $link = $shortcutShell.CreateShortcut((Join-Path $legacyMenuDir $name))
+              $link.TargetPath = Join-Path $installDir 'hermes-relay-ui.cmd'
+              $link.Save()
+            }
+            foreach ($name in $historicalLinks) {
+              $link = $shortcutShell.CreateShortcut((Join-Path $startMenuDir $name))
+              $link.TargetPath = Join-Path $installDir 'hermes-relay.exe'
+              $link.Save()
+            }
+            $upgradeProcess = Start-Process -FilePath $setup -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
+            if ($upgradeProcess.ExitCode -ne 0) { throw "upgrade installer exited with code $($upgradeProcess.ExitCode)" }
+            Assert-StartMenuShortcuts
+            Assert-PreservedState
+            foreach ($name in $legacyLinks) {
+              if (Test-Path -LiteralPath (Join-Path $legacyMenuDir $name)) { throw "upgrade left legacy shortcut $name" }
+            }
 
             $expectedFiles = @(
               'hermes-relay.exe',
@@ -450,10 +521,29 @@ jobs:
             if ($LASTEXITCODE -ne 0 -or $helpOutput -notmatch 'Usage:') {
               throw 'installed CLI --help smoke failed'
             }
-            if (-not (Test-Path -LiteralPath $sessionSentinel -PathType Leaf)) {
-              throw 'installer removed profile session data'
-            }
+            Assert-PreservedState
 
+            # Exercise the installed .lnk through the Windows shell. Process
+            # survival proves launchability only, not visible-window acceptance.
+            Start-Process -FilePath (Join-Path $startMenuDir 'Hermes Relay.lnk') -WindowStyle Hidden
+            Start-Sleep -Seconds 5
+            $runningTray = @(Get-Process -Name 'hermes-relay-tray' -ErrorAction SilentlyContinue |
+              Where-Object { $_.Path -eq $tray })
+            if ($runningTray.Count -ne 1) { throw 'installed GUI shortcut did not leave one running tray process' }
+            Assert-PreservedState
+
+            # Reintroduce old links so uninstall cleanup is checked independently
+            # of successful upgrade migration.
+            foreach ($name in $legacyLinks) {
+              $link = $shortcutShell.CreateShortcut((Join-Path $legacyMenuDir $name))
+              $link.TargetPath = $cli
+              $link.Save()
+            }
+            foreach ($name in $historicalLinks) {
+              $link = $shortcutShell.CreateShortcut((Join-Path $startMenuDir $name))
+              $link.TargetPath = $tray
+              $link.Save()
+            }
             $uninstallProcess = Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait -PassThru
             if ($uninstallProcess.ExitCode -ne 0) { throw "uninstaller exited with code $($uninstallProcess.ExitCode)" }
 
@@ -468,12 +558,10 @@ jobs:
             if (Test-Path $uninstallKey) { throw 'uninstaller left the Installed Apps registry key' }
             if (Test-Path $productKey) { throw 'uninstaller left the HermesRelay product registry key' }
             if (Test-Path -LiteralPath $startMenuDir) { throw "uninstaller left Start-menu artifacts at $startMenuDir" }
-            if (-not (Test-Path -LiteralPath $sessionSentinel -PathType Leaf)) {
-              throw 'uninstaller removed preserved profile session data'
+            foreach ($name in $legacyLinks) {
+              if (Test-Path -LiteralPath (Join-Path $legacyMenuDir $name)) { throw "uninstaller left legacy shortcut $name" }
             }
-            if ((Get-Content -LiteralPath $sessionSentinel -Raw) -notmatch 'preserve-me') {
-              throw 'installer lifecycle modified preserved profile session data'
-            }
+            Assert-PreservedState
 
             # Compare the raw registry value so expandable entries such as
             # %USERPROFILE% are not resolved against the isolated smoke profile.
@@ -502,6 +590,14 @@ jobs:
               $environmentKey.DeleteValue('Path', $false)
             }
             $environmentKey.Dispose()
+            if (Test-Path -LiteralPath $unrelatedSentinel) {
+              Remove-Item -LiteralPath $unrelatedSentinel -Force
+            }
+            if ((Test-Path -LiteralPath $legacyMenuDir) -and
+                @(Get-ChildItem -LiteralPath $legacyMenuDir -Force).Count -eq 0) {
+              # Only remove the now-empty folder, never unrelated contents.
+              Remove-Item -LiteralPath $legacyMenuDir -ErrorAction SilentlyContinue
+            }
             if (Test-Path -LiteralPath $smokeRoot) {
               Remove-Item -LiteralPath $smokeRoot -Recurse -Force -ErrorAction SilentlyContinue
             }
