@@ -5,7 +5,7 @@ const replacements = new Map([
   ["server_version: '1.6.3'", "server_version: '1.9.0'"],
   ["ui_version: '0.4.0-alpha.7'", "ui_version: '0.4.0-beta.4'"],
   ["cli_version: '0.4.0-alpha.4'", "cli_version: '0.4.0-beta.4'"],
-  ["void getCurrentWindow().isVisible().then(visible => { if (visible) start() })", "start()"],
+  ["void getCurrentWindow().isVisible().then(visible => { if (visible) start() }).catch(e => setError(String(e)))", "start()"],
   [
     "selected: 'legacy', effective: 'legacy', available: false, state: 'not_installed',\n    foreground_escalation_enabled: false, message: 'CUA Driver is not installed. Legacy input remains active.'",
     "selected: 'cua', effective: 'cua', available: true, state: 'ready', version: '0.21.0', cursor_enabled: true, active_sessions: 0, active_backend: 'idle',\n    foreground_escalation_enabled: false, message: 'CUA Driver 0.21.0 is compatible and healthy.'"
