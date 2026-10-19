@@ -402,7 +402,7 @@ function ManagementApp() {
     window.addEventListener('hermes-show', start)
     window.addEventListener('hermes-hide', stop)
     document.addEventListener('visibilitychange', visibilityChanged)
-    void getCurrentWindow().isVisible().then(visible => { if (visible) start() })
+    void getCurrentWindow().isVisible().then(visible => { if (visible) start() }).catch(e => setError(String(e)))
     return () => {
       disposed = true
       stop()
@@ -580,7 +580,21 @@ function ManagementApp() {
     return () => window.removeEventListener('hermes-review-grant', review)
   }, [refresh])
 
-  if (!snapshot) return <div className={`app-shell loading ${windowVisible ? 'window-visible' : ''}`}><LoaderCircle className="spin" /><span>Loading Hermes-Relay CLI UI…</span></div>
+  if (!snapshot) return <div className={`app-shell ${windowVisible ? 'window-visible' : ''}`}>
+    <header className="titlebar">
+      <div className="brand"><img src={logo} alt="" /><span>Hermes-Relay CLI UI</span></div>
+      <div className="window-controls"><button aria-label="Hide window" onClick={requestHide}><X /></button></div>
+    </header>
+    <main className="startup-status" aria-busy={error === null}>
+      {error !== null ? <>
+        <AlertTriangle aria-hidden="true" />
+        <strong>Unable to load Hermes-Relay</strong>
+        <p>Local state could not be loaded. Check the error below before retrying.</p>
+        <pre role="alert">{error.trim() || 'The local query failed without an error message.'}</pre>
+        <button onClick={() => { setError(null); void refresh() }}><RefreshCw />Retry</button>
+      </> : <><LoaderCircle className="spin" aria-hidden="true" /><span role="status">Loading Hermes-Relay CLI UI…</span></>}
+    </main>
+  </div>
   const reviewGrant = snapshot.pending_grants[0] ?? null
   const reviewAction = grantAction(reviewGrant?.scope)
   const reviewScope = formatGrantScope(reviewGrant?.scope)

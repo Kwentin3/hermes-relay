@@ -1,6 +1,6 @@
 {
   "name": "@hermes-relay/cli",
-  "version": "0.4.0-beta.10.kwentin.2",
+  "version": "0.4.0-beta.10.kwentin.3",
   "description": "Thin-client CLI for Hermes-Relay — talk to a remote Hermes agent over WSS with pairing auth, stream-renders tool calls and responses to plain stdout.",
   "type": "module",
   "bin": {
@@ -29,7 +29,7 @@
     "build": "npm run gen:version && tsc -p tsconfig.build.json",
     "build:watch": "tsc -p tsconfig.build.json --watch",
     "build:bin": "npm run build:bin:win && npm run build:bin:linux && npm run build:bin:linux-arm && npm run build:bin:mac-x64 && npm run build:bin:mac-arm",
-    "build:bin:win": "npm run gen:version && bun build --compile --minify --sourcemap --target=bun-windows-x64 src/bunWindowsEntry.ts --outfile dist/bin/hermes-relay-win-x64",
+    "build:bin:win": "npm run gen:version && bun build --compile --minify --sourcemap --target=bun-windows-x64-baseline src/bunWindowsEntry.ts --outfile dist/bin/hermes-relay-win-x64",
     "build:bin:linux": "npm run gen:version && bun build --compile --minify --sourcemap --target=bun-linux-x64 src/cli.ts --outfile dist/bin/hermes-relay-linux-x64",
     "build:bin:linux-arm": "npm run gen:version && bun build --compile --minify --sourcemap --target=bun-linux-arm64 src/cli.ts --outfile dist/bin/hermes-relay-linux-arm64",
     "build:bin:mac-x64": "npm run gen:version && bun build --compile --minify --sourcemap --target=bun-darwin-x64 src/cli.ts --outfile dist/bin/hermes-relay-darwin-x64",
