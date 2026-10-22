@@ -42,7 +42,10 @@ export function nodeWebSocketDispatcher(certificate: string) {
         clearTimeout(timer)
         handler.onError(error)
       }
-      const req = request(new URL(options.path, origin), {
+      // Pass the request target verbatim. Resolving a leading `//` as a URL
+      // would replace the reviewed origin rather than preserve its path.
+      const req = request(origin, {
+        path: options.path,
         method: 'GET',
         headers: { ...headers, Connection: 'Upgrade', Upgrade: 'websocket' },
         agent: false,

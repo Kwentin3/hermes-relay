@@ -61,6 +61,7 @@ test('Node WebSocket sends upgrade headers and exchanges frames with a pinned CA
   let receivedHeader: string | string[] | undefined
   const auth = new Promise<string>(resolve => {
     server.on('upgrade', (request, socket) => {
+      assert.equal(request.url, `//127.0.0.1:${port}/relay/ws?fixture=1`)
       receivedHeader = request.headers['x-hermes-relay-session']
       const accept = createHash('sha1').update(request.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64')
       socket.write(Buffer.concat([
@@ -83,7 +84,7 @@ test('Node WebSocket sends upgrade headers and exchanges frames with a pinned CA
       })
     })
   })
-  const socket = new NativeWebSocket(`wss://localhost:${port}/relay/ws?fixture=1`, {
+  const socket = new NativeWebSocket(`wss://localhost:${port}//127.0.0.1:${port}/relay/ws?fixture=1`, {
     headers: { 'X-Hermes-Relay-Session': 'fixture-session' },
     dispatcher: nodeWebSocketDispatcher(CERTIFICATE)
   })
@@ -158,16 +159,18 @@ test('packaged CLI preserves native pairing and refuses invalid TLS before crede
   const deviceId = '11111111-1111-4111-8111-111111111111'
 
   for (const scenario of [
-    { name: 'pinned leaf', hostname: 'localhost', pin, success: true },
-    { name: 'wrong pin', hostname: 'localhost', pin: 'sha256/' + Buffer.alloc(32).toString('base64'), success: false },
-    { name: 'wrong hostname', hostname: '127.0.0.1', pin, success: false }
+    { name: 'pinned leaf', hostname: 'localhost', pin, success: true, networkPath: false },
+    { name: 'network-path target', hostname: 'localhost', pin, success: true, networkPath: true },
+    { name: 'wrong pin', hostname: 'localhost', pin: 'sha256/' + Buffer.alloc(32).toString('base64'), success: false, networkPath: false },
+    { name: 'wrong hostname', hostname: '127.0.0.1', pin, success: false, networkPath: false }
   ]) {
     await t.test(scenario.name, async context => {
       const { server, port } = await fixture(context)
       const home = join(directory, scenario.name)
       const state = join(home, '.hermes')
       mkdirSync(state, { recursive: true })
-      const url = `wss://${scenario.hostname}:${port}/relay/ws`
+      const target = scenario.networkPath ? `//127.0.0.1:${port}/relay/ws?fixture=1` : '/relay/ws'
+      const url = `wss://${scenario.hostname}:${port}${target}`
       const sessionPath = join(state, 'remote-sessions.json')
       writeFileSync(sessionPath, JSON.stringify({ version: 1, sessions: {
         [url]: { token: 'fixture-existing-session', paired_at: 123, server_version: 'fixture-relay', cert_pin_sha256: scenario.pin }
@@ -181,6 +184,7 @@ test('packaged CLI preserves native pairing and refuses invalid TLS before crede
       server.on('upgrade', (request, socket) => {
         upgrades++
         socket.on('error', () => {})
+        assert.equal(request.url, target)
         const accept = createHash('sha1').update(request.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64')
         socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`)
         let input = Buffer.alloc(0)
