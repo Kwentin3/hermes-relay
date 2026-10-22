@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
-import { createHash } from 'node:crypto'
+import { spawn } from 'node:child_process'
+import { createHash, X509Certificate } from 'node:crypto'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:https'
 import type { AddressInfo } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import type { Duplex } from 'node:stream'
 import test, { type TestContext } from 'node:test'
 
@@ -45,8 +49,11 @@ function event(socket: WebSocket, name: 'open' | 'error' | 'message' | 'close'):
 
 function textFrame(text: string): Buffer {
   const payload = Buffer.from(text)
-  assert.ok(payload.length < 126, 'fixture supports short text messages only')
-  return Buffer.concat([Buffer.from([0x81, payload.length]), payload])
+  assert.ok(payload.length < 65536, 'fixture supports messages below 64 KiB only')
+  const head = payload.length < 126
+    ? Buffer.from([0x81, payload.length])
+    : Buffer.from([0x81, 126, payload.length >> 8, payload.length & 255])
+  return Buffer.concat([head, payload])
 }
 
 test('Node WebSocket sends upgrade headers and exchanges frames with a pinned CA-issued leaf', async t => {
@@ -138,3 +145,109 @@ test('a rejected HTTP upgrade finishes as a WebSocket error', async t => {
   await event(socket, 'error')
 })
 
+test('packaged CLI preserves native pairing and refuses invalid TLS before credentials', {
+  skip: !process.env.HERMES_RELAY_TEST_EXE
+}, async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'hermes-relay-packaged-tls-'))
+  const executable = join(directory, 'hermes-relay.exe')
+  copyFileSync(resolve(process.env.HERMES_RELAY_TEST_EXE!), executable)
+  t.after(() => rmSync(directory, { recursive: true, force: true }))
+  const certificate = new X509Certificate(CERTIFICATE)
+  const pin = 'sha256/' + createHash('sha256')
+    .update(certificate.publicKey.export({ type: 'spki', format: 'der' })).digest('base64')
+  const deviceId = '11111111-1111-4111-8111-111111111111'
+
+  for (const scenario of [
+    { name: 'pinned leaf', hostname: 'localhost', pin, success: true },
+    { name: 'wrong pin', hostname: 'localhost', pin: 'sha256/' + Buffer.alloc(32).toString('base64'), success: false },
+    { name: 'wrong hostname', hostname: '127.0.0.1', pin, success: false }
+  ]) {
+    await t.test(scenario.name, async context => {
+      const { server, port } = await fixture(context)
+      const home = join(directory, scenario.name)
+      const state = join(home, '.hermes')
+      mkdirSync(state, { recursive: true })
+      const url = `wss://${scenario.hostname}:${port}/relay/ws`
+      const sessionPath = join(state, 'remote-sessions.json')
+      writeFileSync(sessionPath, JSON.stringify({ version: 1, sessions: {
+        [url]: { token: 'fixture-existing-session', paired_at: 123, server_version: 'fixture-relay', cert_pin_sha256: scenario.pin }
+      } }))
+      const previousSession = readFileSync(sessionPath)
+      const devicePath = join(state, 'desktop-device-id')
+      writeFileSync(devicePath, `${deviceId}\n`)
+      let upgrades = 0
+      const authFrames: Record<string, unknown>[] = []
+
+      server.on('upgrade', (request, socket) => {
+        upgrades++
+        socket.on('error', () => {})
+        const accept = createHash('sha1').update(request.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64')
+        socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`)
+        let input = Buffer.alloc(0)
+        socket.on('data', chunk => {
+          input = Buffer.concat([input, chunk])
+          while (input.length >= 2) {
+            const opcode = input[0]! & 15
+            let length = input[1]! & 127
+            assert.notEqual(length, 127, 'fixture does not accept 64-bit frame lengths')
+            let offset = 2
+            if (length === 126) {
+              if (input.length < 4) return
+              length = input.readUInt16BE(2)
+              offset = 4
+            }
+            assert.ok(input[1]! & 128, 'native client frames must be masked')
+            if (input.length < offset + 4 + length) return
+            const mask = input.subarray(offset, offset + 4)
+            offset += 4
+            const body = Buffer.from(input.subarray(offset, offset + length))
+            input = input.subarray(offset + length)
+            for (let index = 0; index < body.length; index++) body[index] ^= mask[index % 4]!
+            if (opcode === 8) { socket.end(Buffer.from([0x88, 0])); return }
+            if (opcode !== 1) continue
+            const message = JSON.parse(body.toString()) as { channel: string; type: string; payload: Record<string, unknown> }
+            if (message.channel === 'system' && message.type === 'auth') {
+              authFrames.push(message.payload)
+              socket.write(textFrame(JSON.stringify({ channel: 'system', type: 'auth.ok', payload: {
+                session_token: 'fixture-new-session', server_version: 'fixture-relay', expires_at: null,
+                grants: { bridge: null }, transport_hint: 'wss'
+              } })))
+            }
+          }
+        })
+      })
+
+      const child = spawn(executable, ['pair', 'ABC123', '--remote', url, '--non-interactive', '--no-color'], {
+        cwd: directory,
+        env: {
+          ...process.env, USERPROFILE: home, HOME: home,
+          APPDATA: join(home, 'AppData', 'Roaming'), LOCALAPPDATA: join(home, 'AppData', 'Local'),
+          HERMES_RELAY_PAIR_QR: '', HERMES_RELAY_URL: '', NODE_OPTIONS: ''
+        },
+        windowsHide: true
+      })
+      let stderr = ''
+      child.stdout.resume()
+      child.stderr.on('data', chunk => { stderr += String(chunk) })
+      const timeout = setTimeout(() => child.kill(), 20_000)
+      context.after(() => { clearTimeout(timeout); if (child.exitCode === null) child.kill() })
+      const exitCode = await new Promise<number | null>((fulfill, reject) => {
+        child.once('error', reject)
+        child.once('close', fulfill)
+      })
+      clearTimeout(timeout)
+      assert.equal(exitCode, scenario.success ? 0 : 1, stderr)
+      assert.equal(upgrades, scenario.success ? 1 : 0, stderr)
+      assert.equal(authFrames.length, scenario.success ? 1 : 0, stderr)
+      assert.equal(readFileSync(devicePath, 'utf8'), `${deviceId}\n`)
+      if (scenario.success) {
+        assert.equal(authFrames[0]!.pairing_code, 'ABC123')
+        assert.equal(authFrames[0]!.device_id, deviceId)
+        const stored = JSON.parse(readFileSync(sessionPath, 'utf8')) as { sessions: Record<string, { token: string }> }
+        assert.equal(stored.sessions[url]!.token, 'fixture-new-session')
+      } else {
+        assert.deepEqual(readFileSync(sessionPath), previousSession)
+      }
+    })
+  }
+})

@@ -332,6 +332,13 @@ jobs:
       - name: Build tray installer
         run: npm run tray:build
 
+      - name: Test exact packaged Windows TLS and pairing route
+        shell: pwsh
+        run: |
+          $env:HERMES_RELAY_TEST_EXE = (Resolve-Path dist/bin/hermes-relay-win-x64.exe).Path
+          node --import tsx --test tests/nodeWebSocketDispatcher.test.ts
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
       - name: Smoke-test tray exe launch
         shell: pwsh
         run: |
