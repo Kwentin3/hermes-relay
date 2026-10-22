@@ -37,7 +37,7 @@ const installed = join(binDir, isWin ? 'hermes-relay.exe' : 'hermes-relay')
 const backup = installed + '.bak'
 const built = join('dist', 'bin', target.out)
 
-console.log(`dev-install: building ${target.script} (bun --compile)…`)
+console.log(`dev-install: building ${target.script}…`)
 execSync(`npm run ${target.script}`, { stdio: 'inherit' })
 
 if (!existsSync(built)) {

@@ -29,7 +29,7 @@
     "build": "npm run gen:version && tsc -p tsconfig.build.json",
     "build:watch": "tsc -p tsconfig.build.json --watch",
     "build:bin": "npm run build:bin:win && npm run build:bin:linux && npm run build:bin:linux-arm && npm run build:bin:mac-x64 && npm run build:bin:mac-arm",
-    "build:bin:win": "npm run gen:version && bun build --compile --minify --sourcemap --target=bun-windows-x64-baseline src/bunWindowsEntry.ts --outfile dist/bin/hermes-relay-win-x64",
+    "build:bin:win": "npm run gen:version && node scripts/build-windows-node.mjs",
     "build:bin:linux": "npm run gen:version && bun build --compile --minify --sourcemap --target=bun-linux-x64 src/cli.ts --outfile dist/bin/hermes-relay-linux-x64",
     "build:bin:linux-arm": "npm run gen:version && bun build --compile --minify --sourcemap --target=bun-linux-arm64 src/cli.ts --outfile dist/bin/hermes-relay-linux-arm64",
     "build:bin:mac-x64": "npm run gen:version && bun build --compile --minify --sourcemap --target=bun-darwin-x64 src/cli.ts --outfile dist/bin/hermes-relay-darwin-x64",
@@ -82,6 +82,8 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "esbuild": "0.27.7",
+    "postject": "1.0.0-alpha.6",
     "rimraf": "^5.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"

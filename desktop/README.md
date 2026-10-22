@@ -150,9 +150,12 @@ Windows downloads and verifies `hermes-relay-windows-x64-setup.exe`. The install
 places the CLI and management UI together, adds `~/.hermes/bin` to the user PATH, and
 lets the UI start at sign-in. CLI-only installs download the same prebuilt
 single-file CLI binary without the UI; add it later with `hermes-relay ui install`.
-The Windows x64 CLI requires Windows 10 version 1809 or later and a CPU with
-SSE4.2; AVX2 is not required. These are the
-[pinned Bun runtime's baseline requirements](https://github.com/oven-sh/bun/blob/bun-v1.3.14/docs/installation.mdx#cpu-requirements).
+The released Windows x64 CLI through `0.4.0-beta.10.kwentin.3` uses Bun and
+requires SSE4.2. The Windows compatibility candidate uses bundled Node.js
+instead, targeting Windows 10 x64 and older CPUs without SSE4.2/AVX. It remains
+unqualified on Core 2 hardware until the exact installer and update route pass
+on that hardware. The management UI also needs Microsoft WebView2; CLI operation
+does not require it. Existing releases remain unchanged by a source build.
 Pin a release with
 `HERMES_RELAY_VERSION=desktop-v0.3.0-alpha.18`; CLI-only installs can override the
 install directory with `HERMES_RELAY_INSTALL_DIR=...`.
@@ -189,10 +192,14 @@ npm run build
 
 The package name in `package.json` is workspace metadata only today. The desktop CLI is not published to npm.
 
-Standalone builds use the Bun version pinned in `.bun-version`.
-`build:bin:win` uses `bun-windows-x64-baseline` for both the standalone CLI
-and the CLI packaged by `tray:build`; it keeps the same Windows x64 asset names.
-See [Bun's pinned compile targets](https://github.com/oven-sh/bun/blob/bun-v1.3.14/docs/bundler/executables.mdx#supported-targets).
+Windows `build:bin:win` builds a native Node single-executable application on
+Windows x64. It downloads the official runtime pinned in `.node-version`, checks
+its reviewed SHA256, bundles the existing CLI and embeds it without a V8 code
+cache or application snapshot. No Node installation is required on the target.
+`tray:build` packages that same EXE; asset names, stored pairings, daemon entry
+and update channel retain their existing owners. `dist/bin/windows-runtime.json`
+records runtime provenance and the final EXE hash. Review the runtime checksum
+with each Node security update. Linux/macOS retain Bun from `.bun-version`.
 
 Use `npm run build:watch` while editing TypeScript. To exercise a revision as
 the real compiled binary on your PATH, run:
@@ -201,7 +208,7 @@ the real compiled binary on your PATH, run:
 npm run dev:install
 ```
 
-That builds the current-platform Bun binary, installs it to `~/.hermes/bin/`,
+That builds the current-platform binary, installs it to `~/.hermes/bin/`,
 and saves the previous binary beside it as `.bak`. Stop a running daemon first
 on Windows because Windows locks its executable.
 
