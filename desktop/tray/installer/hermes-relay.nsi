@@ -3,6 +3,8 @@ RequestExecutionLevel user
 SetCompressor /SOLID lzma
 
 !include "MUI2.nsh"
+!include "WinVer.nsh"
+!include "x64.nsh"
 
 Name "Hermes Relay"
 OutFile "${OUT_FILE}"
@@ -22,6 +24,17 @@ Var ExistingStartup
 Var InstallAttempt
 
 Function .onInit
+  ; Reject unsupported platforms before stopping an existing installation.
+  ${IfNot} ${RunningX64}
+    MessageBox MB_ICONSTOP "Hermes Relay requires Windows 10 or later (x64)." /SD IDOK
+    SetErrorLevel 1
+    Quit
+  ${EndIf}
+  ${IfNot} ${AtLeastWin10}
+    MessageBox MB_ICONSTOP "Hermes Relay requires Windows 10 or later (x64)." /SD IDOK
+    SetErrorLevel 1
+    Quit
+  ${EndIf}
   ReadRegStr $ExistingStartup HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "HermesRelayTray"
 FunctionEnd
 

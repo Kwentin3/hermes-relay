@@ -85,7 +85,7 @@ jobs:
           fi
 
   build-cli-binaries:
-    name: Build cross-platform CLI binaries via Bun compile
+    name: Build Linux and macOS CLI binaries via Bun compile
     runs-on: ubuntu-latest
     needs: validate-release
     defaults:
@@ -128,9 +128,6 @@ jobs:
 
       # Keep the package.json scripts as the single source of truth for Bun
       # compile flags so release and local smoke builds cannot diverge.
-      - name: Build Windows x64
-        run: npm run build:bin:win
-
       - name: Build Linux x64
         run: npm run build:bin:linux
 
@@ -184,7 +181,6 @@ jobs:
         with:
           name: cli-binaries
           path: |
-            desktop/dist/bin/hermes-relay-win-x64.exe
             desktop/dist/bin/hermes-relay-linux-x64
             desktop/dist/bin/hermes-relay-linux-arm64
             desktop/dist/bin/hermes-relay-darwin-x64
@@ -196,11 +192,11 @@ jobs:
     runs-on: windows-latest
     needs:
       - validate-release
-      - build-cli-binaries
+      - build-windows-tray-installer
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: cli-binaries
+          name: cli-windows-binary
           path: release-assets
 
       - name: Repeated launch and process cleanup gate
@@ -294,16 +290,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version-file: 'desktop/.node-version'
           cache: npm
           cache-dependency-path: |
             desktop/package-lock.json
             desktop/tray/package-lock.json
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: 'desktop/.bun-version'
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -340,6 +331,13 @@ jobs:
 
       - name: Build tray installer
         run: npm run tray:build
+
+      - name: Test exact packaged Windows TLS and pairing route
+        shell: pwsh
+        run: |
+          $env:HERMES_RELAY_TEST_EXE = (Resolve-Path dist/bin/hermes-relay-win-x64.exe).Path
+          node --import tsx --test tests/nodeWebSocketDispatcher.test.ts
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: Smoke-test tray exe launch
         shell: pwsh
@@ -620,6 +618,15 @@ jobs:
             }
           }
 
+      - name: Upload exact Windows CLI used by the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-windows-binary
+          path: |
+            desktop/dist/bin/hermes-relay-win-x64.exe
+            desktop/dist/bin/windows-runtime.json
+          retention-days: 7
+
       - name: Upload Windows tray release asset
         uses: actions/upload-artifact@v4
         with:
@@ -679,7 +686,8 @@ jobs:
           fail_on_unmatched_files: true
           body_path: cli_release_notes_rendered.md
           files: |
-            release-assets/cli-binaries/hermes-relay-win-x64.exe
+            release-assets/cli-windows-binary/hermes-relay-win-x64.exe
+            release-assets/cli-windows-binary/windows-runtime.json
             release-assets/cli-binaries/hermes-relay-linux-x64
             release-assets/cli-binaries/hermes-relay-linux-arm64
             release-assets/cli-binaries/hermes-relay-darwin-x64

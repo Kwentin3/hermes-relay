@@ -21,6 +21,7 @@ import { installWindowsSystemCaTrust } from '../windowsSystemCa.js'
 
 import type { Transport } from './Transport.js'
 import { openBrokerRelaySocket, type BrokerRouteConfig } from './BrokerRelaySocket.js'
+import { nodeWebSocketDispatcher } from './nodeWebSocketDispatcher.js'
 
 const MAX_LOG_LINES = 200
 const MAX_LOG_LINE_BYTES = 4096
@@ -116,12 +117,16 @@ const defaultWSFactory: WSFactory = (url, headers, pinnedCertificatePem) => {
   }
 
   if ((headers && Object.keys(headers).length) || pinnedCertificatePem) {
-    // Bun's compiled runtime supports upgrade headers and scoped TLS options.
-    // Trusting the exact certificate observed during pin verification binds
-    // the live handshake to that check and preserves hostname validation.
+    // Both runtimes accept upgrade headers. Bun takes scoped TLS options;
+    // Node's native WebSocket takes an HTTPS-upgrade dispatcher instead.
+    // Neither route changes global trust or disables hostname validation.
     const options = {
       ...(headers ? { headers } : {}),
-      ...(pinnedCertificatePem ? { tls: { rejectUnauthorized: true, ca: pinnedCertificatePem } } : {})
+      ...(pinnedCertificatePem
+        ? typeof process.versions.bun === 'string'
+          ? { tls: { rejectUnauthorized: true, ca: pinnedCertificatePem } }
+          : { dispatcher: nodeWebSocketDispatcher(pinnedCertificatePem) }
+        : {})
     }
     // Bun accepts options as the second argument. Passing an empty protocols
     // array plus a third options argument silently drops TLS settings and
